@@ -4,38 +4,39 @@ import (
   "github.com/godbus/dbus/v5"
   "strings"
   "os"
-  "fmt"
-  te "./task_executor"
+  //"fmt"
+  te "fydeos.com/shell_daemon/shell_server/task_executor"
 )
 
-var DbusPath = ObjectPath("/io/fydeos/ShellDaemon")
+var DbusPath = dbus.ObjectPath("/io/fydeos/ShellDaemon")
 const DbusIface = "io.fydeos.ShellInterface"
 const ShellCommand = 1
 
 type DbusServer struct {
-  dbus_ch chan *te.AsyncResult,
-  excutor *te.TaskList,
+  dbus_ch chan *te.AsyncResult
+  excutor *te.TaskList
   conn *dbus.Conn
 }
 
 func NewServer (conn *dbus.Conn) *DbusServer {
   server := &DbusServer{
-    make(chan *te.AsyncResult),
-    {tasks:  make(map[int]*te.Task)},
-    conn
+    dbus_ch: make(chan *te.AsyncResult),
+    conn: conn,
   }
-  go func() {
-    for {
-      select {
-        case aResult := <-server.dbus_ch :
+  go server.ListenAsyncCh()
+  return server
+}
+
+func (server *DbusServer) ListenAsyncCh() {
+  for {
+    select {
+      case aResult := <-server.dbus_ch :
           server.ShellNotifying(ShellCommand,
-            aResult.key,
+            aResult.Key,
             aResult.Code,
             aResult.Msg)
-      }
     }
   }
-  return &server
 }
 
 var ErrCommandNotFound = dbus.NewError("no command script found", nil)
@@ -63,7 +64,7 @@ func (server *DbusServer) AsyncExec(script string) (int, string, *dbus.Error) {
 }
 
 func (server *DbusServer) AsyncExec2(script string) (int, string, *dbus.Error) { /*compatible with old script*/
-  return AsyncExec(script)
+  return server.AsyncExec(script)
 }
 
 func (server *DbusServer) GetTaskState(key int) (int, string, *dbus.Error) {
@@ -71,7 +72,7 @@ func (server *DbusServer) GetTaskState(key int) (int, string, *dbus.Error) {
   if err != nil {
     return key, te.StateToStr(0), nil
   }
-  return key, StateToStr(task.State()), nil
+  return key, te.StateToStr(task.State()), nil
 }
 
 func (server *DbusServer) GetAsyncTaskOutput(key int, lines int) (int, string, *dbus.Error) {
@@ -96,7 +97,7 @@ func (server *DbusServer) Exit() {
 }
 
 func (server *DbusServer) ShellNotifying(s_type int, handler int, state int, msg string) error {
-  return server.cnn.Emit(DbusPath, DbusIface, s_type, handler, state, msg)
+  return server.conn.Emit(DbusPath, DbusIface, s_type, handler, state, msg)
 }
 
 func (server *DbusServer) EmitNotification(s_type int, handler int, state int, msg string) (int, *dbus.Error) {

@@ -5,7 +5,7 @@ import  (
   "github.com/godbus/dbus/v5/introspect"
   "os"
   "fmt"
-  "./shell_server"
+  "fydeos.com/shell_daemon/shell_server"
 )
 
 const intro = `
@@ -50,7 +50,7 @@ const intro = `
     </interface>` + introspect.IntrospectDataString + `</node> `
 
 func main() {
-  conn, err := dbus.ConnectSystemBus()
+  conn, err := dbus.SystemBus()
   if err != nil {
     panic(err)
   }

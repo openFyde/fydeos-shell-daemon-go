@@ -8,22 +8,24 @@ import (
   "time"
   "sync"
   "strings"
+  "errors"
 )
 
 type Task struct {
- cmd *exec.Command,
- start Time,
+ cmd  *exec.Cmd
+ start time.Time
  is_async bool
+ tmpFile string
 }
 
 type TaskList struct {
-  counter int,
-  tasks map[int]*Task,
+  counter int
+  tasks map[int]*Task
   mux sync.Mutex
 }
 
 type TaskResult struct {
-  Code int,
+  Code int
   Msg string
 }
 
@@ -33,8 +35,8 @@ func (result *TaskResult) Fill(code int, msg string) {
 }
 
 type AsyncResult struct {
-  Key int,
-  Code int,
+  Key int
+  Code int
   Msg string
 }
 
@@ -48,32 +50,32 @@ const err_code = -1
 
 func newTask(args []string, is_async bool) (*Task, error) {
   if len(args) < 1 {
-    return nil, error("need one command at least")
+    return nil, errors.New("need one command at least")
   }
   task := &Task{
     exec.Command(args[0], args[1:]...),
-    Time.now(),
-    is_async
+    time.Now(),
+    is_async,
+    "None",
   }
-  task.Cmd.Env = append(task.Cmd.Env, env_path)
+  task.cmd.Env = append(task.cmd.Env, env_path)
   if is_async {
-    task.Cmd.Stdout, err := ioutil.TempFile("", "fydeshell")
+    tempFile, err := ioutil.TempFile("", "fydeshell")
+    task.cmd.Stdout = tempFile
+    task.tmpFile = tempFile.Name()
     if err != nil {
-        return nil, error("can't create temp file")
+        return nil, errors.New("can't create temp file")
     }
   }
   return task,nil
 }
 
 func (tk *Task) GetTmpFileName() string {
-  if !tk.is_async {
-    return "None"
-  }
-  return tk.cmd.Stdout.Name()
+  return tk.tmpFile
 }
 
 func (tk *Task) IsAsync() bool {
-  return tk.is_aysnc
+  return tk.is_async
 }
 
 func (tk *Task) Close() error {
@@ -84,8 +86,7 @@ func (tk *Task) Close() error {
     }
   }
   if tk.is_async {
-    tk.cmd.Stdout.Close()
-    err = os.Remove(tk.cmd.Stdout.Name())
+    err := os.Remove(tk.tmpFile)
     if err != nil {
       return err
     }
@@ -95,10 +96,10 @@ func (tk *Task) Close() error {
 
 func (tk *Task) State() int {
   var result = on_process
-  if task.cmd.ProcessState.Exited() {
+  if tk.cmd.ProcessState.Exited() {
     result = on_closed
   }
-  if task.cmd.ProcessState.ExitCode != 0 {
+  if tk.cmd.ProcessState.ExitCode() != 0 {
     result = on_error
   }
   return result
@@ -115,13 +116,17 @@ func StateToStr(state int) string {
 }
 
 func (tl *TaskList) GetTask(key int) (*Task, error) {
-  return tl.tasks[key]
+  task, ok := tl.tasks[key]
+  if !ok {
+    return nil, errors.New("NoTask")
+  }
+  return task, nil
 }
 
 func (tl *TaskList) GetState(key int) string {
-  task, err := tl.tasks[key]
+  task, ok := tl.tasks[key]
   var tmpFile = "None"
-  if err != nil {
+  if !ok {
    return fmt.Sprintf(state_format, key, StateToStr(0), tmpFile, -1, 0)
   }
   tmpFile = task.GetTmpFileName()
@@ -151,14 +156,15 @@ func (tl *TaskList) appendTask(task *Task) int {
 }
 
 func (tl *TaskList) deleteTask(id int) error {
-  task, err = tl.tasks[id]
-  if err != nil {
-    return err
+  task, ok := tl.tasks[id]
+  if !ok {
+    return errors.New("NoTask")
   }
   tl.mux.Lock()
   delete(tl.tasks, id)
   tl.mux.Unlock()
   task.Close()
+  return nil
 }
 
 func (tl *TaskList) RemoveTask(id int) {
@@ -175,15 +181,15 @@ func (tl *TaskList) RemoveAllTasks() {
 func (tl *TaskList) SyncExec(args []string, ch chan *TaskResult) {
   var result *TaskResult
   defer close(ch)
-  defer ch <- result
+  defer func() {ch <- result}()
   task, err := newTask(args, false)
   if err != nil {
     result.Fill(err_code, err.Error())
     return
   }
   id := tl.appendTask(task)
-  buf, err = task.cmd.CombinedOutput()
-  result.Fill(task.cmd.ProcessState.Exitcode, string(buf))
+  buf, err := task.cmd.CombinedOutput()
+  result.Fill(task.cmd.ProcessState.ExitCode(), string(buf))
   tl.deleteTask(id)
 }
 
@@ -205,13 +211,13 @@ func (tl *TaskList) AsyncExec(args []string, ch chan *TaskResult, dbus_ch chan *
   }
   result.Fill(key, StateToStr(task.State()))
   ch <- result
-  task.Wait()
-  dbus_ch <- &AsyncResult{key, task.cmd.ProcessState.ExitCode, StateToStr(task.State())}
+  task.cmd.Wait()
+  dbus_ch <- &AsyncResult{key, task.cmd.ProcessState.ExitCode(), StateToStr(task.State())}
 }
 
 func (tl *TaskList) GetAsyncTaskOutput (key int, lines int, ch chan *TaskResult) {
-  task, err := tl.tasks[key]
-  if err != nil || !task.IsAsync() || lines < 1 {
+  task, ok := tl.tasks[key]
+  if !ok || !task.IsAsync() || lines < 1 {
     ch <- &TaskResult{key, StateToStr(0)}
     return
   }
