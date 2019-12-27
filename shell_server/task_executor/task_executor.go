@@ -9,7 +9,26 @@ import (
   "sync"
   "strings"
   "errors"
+  "runtime"
 )
+
+// Debug related begin
+const debug = false
+
+func trace() string{
+    pc, _, _, ok := runtime.Caller(1)
+    if !ok { return "?"}
+
+    fn := runtime.FuncForPC(pc)
+    return fn.Name()
+}
+
+func dPrintln(a ...interface{}) {
+  if debug {
+    fmt.Println(a...)
+  }
+}
+//Debug related end
 
 type Task struct {
  cmd  *exec.Cmd
@@ -21,7 +40,7 @@ type Task struct {
 type TaskList struct {
   counter int
   tasks map[int]*Task
-  mux sync.Mutex
+  mux *sync.Mutex
 }
 
 type TaskResult struct {
@@ -47,6 +66,13 @@ const on_closed = 2
 const on_error = 3
 const on_none = 0
 const err_code = -1
+
+func NewTaskList () *TaskList {
+  return &TaskList{ 0,
+    make(map[int]*Task),
+    &sync.Mutex{},
+  }
+}
 
 func newTask(args []string, is_async bool) (*Task, error) {
   if len(args) < 1 {
@@ -79,7 +105,7 @@ func (tk *Task) IsAsync() bool {
 }
 
 func (tk *Task) Close() error {
-  if !tk.cmd.ProcessState.Exited() {
+  if tk.cmd.ProcessState != nil {
     err := tk.cmd.Process.Kill()
     if err != nil {
       return err
@@ -96,11 +122,11 @@ func (tk *Task) Close() error {
 
 func (tk *Task) State() int {
   var result = on_process
-  if tk.cmd.ProcessState.Exited() {
+  if tk.cmd.ProcessState != nil {
     result = on_closed
-  }
-  if tk.cmd.ProcessState.ExitCode() != 0 {
-    result = on_error
+    if tk.cmd.ProcessState.ExitCode() != 0 {
+      result = on_error
+    }
   }
   return result
 }
@@ -133,7 +159,7 @@ func (tl *TaskList) GetState(key int) string {
   return fmt.Sprintf(state_format, key,
     StateToStr(task.State()),
     tmpFile,
-    task.cmd.ProcessState.Pid(),
+    task.cmd.Process.Pid,
     time.Since(task.start).Seconds)
 }
 
@@ -179,9 +205,11 @@ func (tl *TaskList) RemoveAllTasks() {
 }
 
 func (tl *TaskList) SyncExec(args []string, ch chan *TaskResult) {
-  var result *TaskResult
-  defer close(ch)
-  defer func() {ch <- result}()
+  result := &TaskResult{}
+  defer func () {
+    ch<-result
+    close(ch)
+  }()
   task, err := newTask(args, false)
   if err != nil {
     result.Fill(err_code, err.Error())
@@ -191,10 +219,11 @@ func (tl *TaskList) SyncExec(args []string, ch chan *TaskResult) {
   buf, err := task.cmd.CombinedOutput()
   result.Fill(task.cmd.ProcessState.ExitCode(), string(buf))
   tl.deleteTask(id)
+  dPrintln(trace(), result)
 }
 
 func (tl *TaskList) AsyncExec(args []string, ch chan *TaskResult, dbus_ch chan *AsyncResult) {
-  var result *TaskResult
+  result := &TaskResult{}
   task, err := newTask(args, true)
   if err != nil {
     result.Fill(err_code, err.Error())
@@ -212,6 +241,7 @@ func (tl *TaskList) AsyncExec(args []string, ch chan *TaskResult, dbus_ch chan *
   result.Fill(key, StateToStr(task.State()))
   ch <- result
   task.cmd.Wait()
+  dPrintln(trace(), key, task.cmd.ProcessState.ExitCode(), StateToStr(task.State()))
   dbus_ch <- &AsyncResult{key, task.cmd.ProcessState.ExitCode(), StateToStr(task.State())}
 }
 
@@ -223,6 +253,9 @@ func (tl *TaskList) GetAsyncTaskOutput (key int, lines int, ch chan *TaskResult)
   }
   script := fmt.Sprintf("tail -n %v %v", lines, task.GetTmpFileName())
   tl.SyncExec(strings.Fields(script), ch)
+  if task.State() == on_closed || task.State() == on_error {
+    tl.RemoveTask(key)
+  }
 }
 
 func (tl *TaskList) GetCounter() int {

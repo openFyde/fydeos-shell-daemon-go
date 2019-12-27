@@ -59,7 +59,7 @@ func main() {
   conn.Export(server, shell_server.DbusPath, shell_server.DbusIface)
   conn.Export(introspect.Introspectable(intro), shell_server.DbusPath,
     "org.freedesktop.DBus.Introspectable")
-  reply, err := conn.RequestName(shell_server.DbusIface, dbus.NameFlagDoNotQueue)
+  reply, err := conn.RequestName("io.fydeos.ShellDaemon", dbus.NameFlagDoNotQueue)
   if err != nil {
     panic(err)
   }
