@@ -1,7 +1,7 @@
 package shell_server
 
 import (
-  "github.com/godbus/dbus/v5"
+  "github.com/godbus/dbus"
   "strings"
   "os"
   "runtime"

@@ -67,6 +67,13 @@ const on_error = 3
 const on_none = 0
 const err_code = -1
 
+func (tk *Task) ExitCode() int {
+  if tk.cmd.ProcessState.Success() {
+    return 0
+  }
+  return err_code
+}
+
 func NewTaskList () *TaskList {
   return &TaskList{ 0,
     make(map[int]*Task),
@@ -122,9 +129,9 @@ func (tk *Task) Close() error {
 
 func (tk *Task) State() int {
   var result = on_process
-  if tk.cmd.ProcessState != nil {
+  if tk.cmd.ProcessState != nil && tk.cmd.ProcessState.Exited() {
     result = on_closed
-    if tk.cmd.ProcessState.ExitCode() != 0 {
+    if !tk.cmd.ProcessState.Success() {
       result = on_error
     }
   }
@@ -217,7 +224,7 @@ func (tl *TaskList) SyncExec(args []string, ch chan *TaskResult) {
   }
   id := tl.appendTask(task)
   buf, err := task.cmd.CombinedOutput()
-  result.Fill(task.cmd.ProcessState.ExitCode(), string(buf))
+  result.Fill(task.ExitCode(), string(buf))
   tl.deleteTask(id)
   dPrintln(trace(), result)
 }
@@ -241,8 +248,8 @@ func (tl *TaskList) AsyncExec(args []string, ch chan *TaskResult, dbus_ch chan *
   result.Fill(key, StateToStr(task.State()))
   ch <- result
   task.cmd.Wait()
-  dPrintln(trace(), key, task.cmd.ProcessState.ExitCode(), StateToStr(task.State()))
-  dbus_ch <- &AsyncResult{key, task.cmd.ProcessState.ExitCode(), StateToStr(task.State())}
+  dPrintln(trace(), key, task.ExitCode(), StateToStr(task.State()))
+  dbus_ch <- &AsyncResult{key, task.ExitCode(), StateToStr(task.State())}
 }
 
 func (tl *TaskList) GetAsyncTaskOutput (key int, lines int, ch chan *TaskResult) {
