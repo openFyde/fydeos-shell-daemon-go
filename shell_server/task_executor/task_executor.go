@@ -112,7 +112,7 @@ func (tk *Task) IsAsync() bool {
 }
 
 func (tk *Task) Close() error {
-  if tk.cmd.ProcessState != nil {
+  if tk.cmd.ProcessState != nil && !tk.cmd.ProcessState.Exited() {
     err := tk.cmd.Process.Kill()
     if err != nil {
       return err
@@ -120,6 +120,7 @@ func (tk *Task) Close() error {
   }
   if tk.is_async {
     err := os.Remove(tk.tmpFile)
+    dPrintln("remove", tk.tmpFile, err)
     if err != nil {
       return err
     }
@@ -260,7 +261,7 @@ func (tl *TaskList) GetAsyncTaskOutput (key int, lines int, ch chan *TaskResult)
   }
   script := fmt.Sprintf("tail -n %v %v", lines, task.GetTmpFileName())
   tl.SyncExec(strings.Fields(script), ch)
-  if task.State() == on_closed || task.State() == on_error {
+  if task.State() == on_closed {
     tl.RemoveTask(key)
   }
 }
