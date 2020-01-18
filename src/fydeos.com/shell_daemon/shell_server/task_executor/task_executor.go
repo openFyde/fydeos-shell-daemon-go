@@ -250,18 +250,33 @@ func (tl *TaskList) AsyncExec(args []string, ch chan *TaskResult, dbus_ch chan *
   ch <- result
   task.cmd.Wait()
   dPrintln(trace(), key, task.ExitCode(), StateToStr(task.State()))
-  dbus_ch <- &AsyncResult{key, task.ExitCode(), StateToStr(task.State())}
+  dbus_ch <- &AsyncResult{key, task.State(), StateToStr(task.State())}
 }
 
 func (tl *TaskList) GetAsyncTaskOutput (key int, lines int, ch chan *TaskResult) {
+  result := &TaskResult{}
+  defer func () {
+    ch<-result
+    close(ch)
+  }()
   task, ok := tl.tasks[key]
   if !ok || !task.IsAsync() || lines < 1 {
-    ch <- &TaskResult{key, StateToStr(0)}
+    result.Fill(on_none, StateToStr(on_none))
     return
   }
   script := fmt.Sprintf("tail -n %v %v", lines, task.GetTmpFileName())
-  tl.SyncExec(strings.Fields(script), ch)
-  if task.State() == on_closed {
+  task, err := newTask(strings.Fields(script), false)
+  if err != nil {
+    result.Fill(err_code, err.Error())
+    return
+  }
+  buf, err := task.cmd.CombinedOutput()
+  if err != nil {
+    result.Fill(err_code, err.Error())
+    return
+  }
+  result.Fill(task.State(), string(buf))
+  if task.State() == on_closed || task.State() == on_error {
     tl.RemoveTask(key)
   }
 }
