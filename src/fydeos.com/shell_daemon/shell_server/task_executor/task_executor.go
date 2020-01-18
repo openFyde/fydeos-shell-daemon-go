@@ -265,12 +265,12 @@ func (tl *TaskList) GetAsyncTaskOutput (key int, lines int, ch chan *TaskResult)
     return
   }
   script := fmt.Sprintf("tail -n %v %v", lines, task.GetTmpFileName())
-  task, err := newTask(strings.Fields(script), false)
+  taskTmp, err := newTask(strings.Fields(script), false)
   if err != nil {
     result.Fill(err_code, err.Error())
     return
   }
-  buf, err := task.cmd.CombinedOutput()
+  buf, err := taskTmp.cmd.CombinedOutput()
   if err != nil {
     result.Fill(err_code, err.Error())
     return
