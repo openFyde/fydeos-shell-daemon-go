@@ -112,7 +112,7 @@ func (tk *Task) IsAsync() bool {
 }
 
 func (tk *Task) Close() error {
-  if tk.cmd.Process != nil && !tk.cmd.ProcessState.Exited() {
+  if (!tk.is_async && tk.cmd.ProcessState != nil && !tk.cmd.ProcessState.Exited()) || (tk.is_async && tk.cmd.Process != nil) {
     err := tk.cmd.Process.Kill()
     if err != nil {
       return err
