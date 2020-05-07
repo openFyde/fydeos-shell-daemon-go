@@ -68,6 +68,9 @@ const on_none = 0
 const err_code = -1
 
 func (tk *Task) ExitCode() int {
+  if tk.cmd.ProcessState == nil {
+	return err_code
+  }
   if tk.cmd.ProcessState.Success() {
     return 0
   }
