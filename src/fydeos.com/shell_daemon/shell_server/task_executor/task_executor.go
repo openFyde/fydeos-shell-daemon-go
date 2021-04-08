@@ -98,6 +98,7 @@ func newTask(args []string, is_async bool) (*Task, error) {
   if is_async {
     tempFile, err := ioutil.TempFile("", "fydeshell")
     task.cmd.Stdout = tempFile
+    task.cmd.Stderr = tempFile
     task.tmpFile = tempFile.Name()
     if err != nil {
         return nil, errors.New("can't create temp file")
