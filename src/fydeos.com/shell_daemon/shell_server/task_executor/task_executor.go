@@ -50,7 +50,12 @@ type TaskResult struct {
 
 func (result *TaskResult) Fill(code int, msg string) {
   result.Code = code
-  result.Msg = msg
+  result.Msg = strings.Map(func(r rune) rune {
+    if r != 0 {
+      return r
+    }
+    return -1
+  }, msg)
 }
 
 type AsyncResult struct {
