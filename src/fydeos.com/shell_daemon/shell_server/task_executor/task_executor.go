@@ -234,7 +234,11 @@ func (tl *TaskList) SyncExec(args []string, ch chan *TaskResult) {
   }
   id := tl.appendTask(task)
   buf, err := task.cmd.CombinedOutput()
-  result.Fill(task.ExitCode(), string(buf))
+  if err == nil {
+    result.Fill(task.ExitCode(), string(buf))
+  } else {
+    result.Fill(task.ExitCode(), err.Error())
+  }
   tl.deleteTask(id)
   dPrintln(trace(), result)
 }
