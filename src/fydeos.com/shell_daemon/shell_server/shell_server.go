@@ -97,7 +97,7 @@ func (server *DbusServer) AsyncExec2(script string) (*te.TaskResult, *dbus.Error
 }
 
 func (server *DbusServer) GetTaskState(key int) (*te.TaskResult, *dbus.Error) {
-	task, err := server.excutor.GetTask(key)
+	_, err := server.excutor.GetTask(key)
 	if err != nil {
 		return EmptyResult, nil
 	}
