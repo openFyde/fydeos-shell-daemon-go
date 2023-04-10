@@ -176,14 +176,14 @@ func (tl *TaskList) GetState(key int) string {
 	task, ok := tl.tasks[key]
 	var tmpFile = "None"
 	if !ok {
-		return fmt.Sprintf(state_format, key, StateToStr(0), tmpFile, -1, 0)
+		return fmt.Sprintf(state_format, key, StateToStr(0), tmpFile, -1, 0.0)
 	}
 	tmpFile = task.GetTmpFileName()
 	return fmt.Sprintf(state_format, key,
 		StateToStr(task.State()),
 		tmpFile,
 		task.cmd.Process.Pid,
-		time.Since(task.start).Seconds)
+		time.Since(task.start).Seconds())
 }
 
 func (tl *TaskList) GetAllStates() string {
