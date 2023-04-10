@@ -101,7 +101,7 @@ func (server *DbusServer) GetTaskState(key int) (*te.TaskResult, *dbus.Error) {
 	if err != nil {
 		return EmptyResult, nil
 	}
-	return &te.TaskResult{key, te.StateToStr(task.State())}, nil
+	return &te.TaskResult{key, te.GetState(key)}, nil
 }
 
 func (server *DbusServer) GetAsyncTaskOutput(key int, lines int) (*te.TaskResult, *dbus.Error) {
